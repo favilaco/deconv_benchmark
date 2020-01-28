@@ -19,39 +19,34 @@ The following line is needed for fresh installations of Linux (Debian):
 `sudo apt-get install curl libcurl4-openssl-dev libssl-dev zlib1g-dev r-base-dev libxml2-dev`
 
 
-
 R 3.6.0: REQUIRED PACKAGES AND PACKAGE DEPENDENCIES:
 ===================================================
 Code to be run before running any deconvolution (to be run in **R >= 3.6.0**):
 ```
-packages <- c("devtools", "BiocManager", "data.table", "ggplot2","tidyverse",
+packages <- c("devtools", "BiocManager","data.table","ggplot2","tidyverse",
 			  "Matrix","matrixStats",
-			  "edgeR","DESeq2","limma",
-			  "gtools","pcaMethods",
-			  "BiocParallel","foreach","doMC","doSNOW", #for parallelism
-			  "preprocessCore","SingleR", #normalization
-			  "scater","Seurat","sctransform","SingleCellExperiment","Linnorm", #sc-specific normalization
-			  "DeconRNASeq","nnls","FARDEEP","MASS","glmnet","ComICS","dtangle") #bulk deconvolution methods
+			  "gtools",
+			  "foreach","doMC","doSNOW", #for parallelism
+			  "Seurat","sctransform", #sc-specific normalization
+			  "nnls","FARDEEP","MASS","glmnet","ComICS","dtangle") #bulk deconvolution methods
 
 for (i in packages){ install.packages(i, character.only = TRUE)}
 
-#Following packages through BiocManager:
-BiocManager::install("MAST") #requirement for DWLS
-BiocManager::install("Biobase") #requirement for MuSiC
+# Installation using BiocManager:
+# Some packages that didn't work with install.packages (e.g. may not be present in a CRAN repository chosen by the user)
+packages3 = c('limma','edgeR','DESeq2','pcaMethods','BiocParallel','preprocessCore','SingleR','scater','SingleCellExperiment','Linnorm','DeconRNASeq','multtest','GSEABase','annotate','genefilter','preprocessCore','graph','MAST','Biobase') #last two are required by DWLS and MuSiC, respectively.
+for (i in packages3){ BiocManager::install(i, character.only = TRUE)}
 
-#dependencies for CellMix: 'NMF', 'csSAM', 'GSEABase', 'annotate', 'genefilter', 'preprocessCore', 'limSolve', 'corpcor', 'graph', 'BiocInstaller'
-packages2 = c('NMF', 'csSAM', 'limSolve', 'corpcor')
+# Dependencies for CellMix: 'NMF', 'csSAM', 'GSEABase', 'annotate', 'genefilter', 'preprocessCore', 'limSolve', 'corpcor', 'graph', 'BiocInstaller'
+packages2 = c('NMF','csSAM','limSolve','corpcor')
 for (i in packages2){ install.packages(i, character.only = TRUE)}
 
-packages3 = c('DESeq2','GSEABase', 'annotate', 'genefilter', 'preprocessCore' , 'graph')
-for (i in packages3){ BiocManager::install(i, character.only = TRUE)}
-	
-#Special instructions for CellMix
+# Special instructions for CellMix
 install.packages("BiocInstaller", repos="http://bioconductor.org/packages/3.7/bioc/")
 system('wget http://web.cbio.uct.ac.za/~renaud/CRAN/src/contrib/CellMix_1.6.2.tar.gz')
 system("R CMD INSTALL CellMix_1.6.2.tar.gz")
 
-#Following packages come from Github
+# Following packages come from Github
 devtools::install_github("GfellerLab/EPIC", build_vignettes=TRUE) #requires knitr
 devtools::install_github("xuranw/MuSiC") 
 devtools::install_bitbucket("yuanlab/dwls", ref="default")
