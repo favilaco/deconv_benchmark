@@ -168,28 +168,28 @@ For bulk:
 Rscript Master_deconvolution.R example none bulk TMM all nnls 100 none 1
 	#Expected output:
 	#        RMSE   Pearson
-	#1 0.06732939 0.9558643
+	#1 0.06888166 0.9533725
 
 
 # With the example we provided with this repository + "cell_type_1" removed:
 Rscript Master_deconvolution.R example none bulk TMM all nnls 100 cell_type_1 1
 	#Expected output:
 	#       RMSE   Pearson
-	#1 0.1166005 0.8806438
+	#1 0.1205357 0.8732407
 
 
 # With baron (or GSE81547, E-MTAB-5061, PBMCs) + no cell type removed:
 Rscript Master_deconvolution.R baron none bulk TMM all nnls 100 none 1
 	#Expected output:
 	#       RMSE   Pearson
-	#1 0.0302318 0.9866144
+	#1 0.0431469 0.9730492
 
 
 # With baron + delta cells removed:
 Rscript Master_deconvolution.R baron none bulk TMM all nnls 100 delta 1
 	#Expected output:
 	#        RMSE   Pearson
-	#1 0.06732743 0.9353965
+	#1 0.08203786 0.9022057
 ```
 
 
@@ -201,26 +201,31 @@ For single-cell:
 Rscript Master_deconvolution.R example none sc TMM TMM MuSiC 100 none 1
 	#Expected output:
 	#        RMSE   Pearson
-	#1 0.06977075 0.9527703
+	#1 0.0821538 0.934689
 
 
 # With the example we provided with this repository + "cell_type_1" removed:
 Rscript Master_deconvolution.R example none sc TMM TMM MuSiC 100 cell_type_1 1
 	#Expected output:
 	#       RMSE   Pearson
-	#1 0.1156908 0.8844441
+	#1 0.1173975 0.8831119
 
 
 # With baron (or GSE81547, E-MTAB-5061, PBMCs) + no cell type removed:
 Rscript Master_deconvolution.R baron none sc TMM TMM MuSiC 100 none 1
 	#Expected output:
 	#        RMSE   Pearson
-	#1 0.02969693 0.9872341
+	#1 0.03079825 0.9863786
 
 
 # With baron + delta cells removed:
 Rscript Master_deconvolution.R baron none sc TMM TMM MuSiC 100 delta 1
 	#Expected output:
 	#        RMSE   Pearson
-	#1 0.07012602 0.9293059
+	#1 0.07518313 0.9274771
 ```
+
+
+sessionInfo() files Linux & macOS
+----------------------------------
+Please see "sessionInfo_Linux.txt" and "sessionInfo_macOS.txt" in this repository.
