@@ -1,17 +1,18 @@
 Source code (R statistical programming language, v3.6) to reproduce the results described in the article:
 
-> *Avila Cobos F, Alquicira-Hernandez J, Powell J, Mestdagh P and De Preter K.* **Comprehensive benchmarking of computational deconvolution of transcriptomics data.** *(bioRxiv)*
+> *Avila Cobos F, Alquicira-Hernandez J, Powell J, Mestdagh P and De Preter K.* **Comprehensive benchmarking of computational deconvolution of transcriptomics data.** *(bioRxiv; https://doi.org/10.1101/2020.01.10.897116)*
 
 DATASETS
 ========
 Here we provide an **example folder** (named "example"; see *"Folder requirements & running the deconvolution"*) that can be directly used. It contains an artificial single-cell RNA-seq dataset made of 5 artificial cell types; 200 cells per cell type and 80 genes.
 
-The **other four external datasets** (together with the necessary metadata) can be downloaded from their respective sources:
+The **other five external datasets** (together with the necessary metadata) can be downloaded from their respective sources:
 
 * Baron: https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE84133 (Specifically, GSM2230757 to GSM2230760 for human pancreatic islands)
 * GSE81547: https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE81547
 * E-MTAB-5061: https://www.ebi.ac.uk/arrayexpress/experiments/E-MTAB-5061/
 * PBMCs: https://support.10xgenomics.com/single-cell-geneexpression/datasets/1.1.0/fresh_68k_pbmc_donor_a 
+* kidney.HCL: https://figshare.com/articles/HCL_DGE_Data/7235471
 
 Regarding E-MTAB-5061: cells with "not_applicable", "unclassified” and “co-expression_cell" labels were excluded and only cells coming from six healthy patients (non-diabetic) were kept.
 
@@ -56,11 +57,8 @@ devtools::install_github("cozygene/bisque")
 
 ```
 
-We also provide four files containing all possible cell type proportions for 2, 3, 4 and 5 cell types in a mixture (with sum-to-one constraint):
-- p2.txt
-- p3.txt
-- p4.txt
-- p5.txt
+Users interested in the **generation of pseudo-bulk mixtures from scRNA-seq data** can use the *"Generator"* function that is located inside **helper_functions.R**
+
 
 References to other methods included in our benchmark:
 ======================================================
@@ -84,9 +82,9 @@ While our work has a **BSD (3-clause)** license, you **may need** to obtain a li
 | deconvSeq | Du, R., Carey, V. & Weiss, S. T. deconvSeq: deconvolution of cell mixture distribution in sequencing data. Bioinformatics doi:10.1093/bioinformatics/btz444 |
 | DWLS | Tsoucas, D. et al. Accurate estimation of cell-type composition from gene expression data. Nat. Commun. 10, 1–9 (2019) |
 | MuSiC | Wang, X., Park, J., Susztak, K., Zhang, N. R. & Li, M. Bulk tissue cell type deconvolution with multi-subject single-cell expression reference. Nat. Commun. 10, 380 (2019) |
-| SCDC | Dong, M. et al. SCDC: Bulk Gene Expression Deconvolution by Multiple Single-Cell RNA Sequencing References. bioRxiv 743591 (2019) doi:10.1101/743591 |
+| SCDC | Dong, M. et al. SCDC: Bulk Gene Expression Deconvolution by Multiple Single-Cell RNA Sequencing References. Briefings in Bioinformatics (2020), bbz166, https://doi.org/10.1093/bib/bbz166 |
 |--------|----------|
-| sctransform / regularized negative binomial regression (RNBR) | Hafemeister, C. & Satija, R. Normalization and variance stabilization of single-cell RNA-seq data using regularized negative binomial regression. bioRxiv 576827 (2019) doi:10.1101/576827 |
+| SCTransform / regularized negative binomial regression (RNBR) | Hafemeister, C. & Satija, R. Normalization and variance stabilization of single-cell RNA-seq data using regularized negative binomial regression. Genome Biology (2019) doi:10.1186/s13059-019-1874-1 |
 | Linnorm | Yip, S. H., Wang, P., Kocher, J.-P. A., Sham, P. C. & Wang, J. Linnorm: improved statistical analysis for single cell RNA-seq expression data. Nucleic Acids Res. 45, e179–e179 (2017) |
 | scran | L. Lun, A. T., Bach, K. & Marioni, J. C. Pooling across cells to normalize single-cell RNA sequencing data with many zero counts. Genome Biol. 17, 75 (2016) |
 | scater | McCarthy, D. J., Campbell, K. R., Lun, A. T. L. & Wills, Q. F. Scater: pre-processing, quality control, normalization and visualization of single-cell RNA-seq data in R. Bioinformatics 33, 1179–1186 (2017) |
@@ -117,10 +115,6 @@ a) Folder structure:
 
 ├── helper_functions.R
 ├── Master_deconvolution.R
-├── p2.txt
-├── p3.txt
-├── p4.txt
-├── p5.txt
 └── CIBERSORT.R
 ```
 
@@ -149,7 +143,7 @@ d) Make the following choices:
 			iii.1.3) choose deconvolution method among: "CIBERSORT","DeconRNASeq","OLS","nnls","FARDEEP","RLR","DCQ","elastic_net","lasso","ridge","EPIC","DSA","ssKL","ssFrobenius","dtangle".
 
 		iii.2) For "sc" methods:
-			iii.2.1) choose normalization method for both the reference matrix (scC) and the pseudo-bulk matrix (scT) among: "column","row","mean","column_z-score","global_z-score","column_min-max","global_min-max","LogNormalize","QN","TMM","UQ", "median_ratios", "TPM", "RNBR","scran","scater","Linnorm" (last 4 are single-cell-specific)
+			iii.2.1) choose normalization method for both the reference matrix (scC) and the pseudo-bulk matrix (scT) among: "column","row","mean","column_z-score","global_z-score","column_min-max","global_min-max","LogNormalize","QN","TMM","UQ", "median_ratios", "TPM", "SCTransform","scran","scater","Linnorm" (last 4 are single-cell-specific)
 			iii.2.2.) choose deconvolution method among: "MuSiC","BisqueRNA","DWLS","deconvSeq","SCDC"
 
 	iv) Number of cells to be used to make the pseudo-bulk mixtures (multiple of 100)
@@ -168,28 +162,28 @@ For bulk:
 Rscript Master_deconvolution.R example none bulk TMM all nnls 100 none 1
 	#Expected output:
 	#        RMSE   Pearson
-	#1 0.06888166 0.9533725
+	#1 	   0.0351    0.9866
 
 
 # With the example we provided with this repository + "cell_type_1" removed:
 Rscript Master_deconvolution.R example none bulk TMM all nnls 100 cell_type_1 1
 	#Expected output:
 	#       RMSE   Pearson
-	#1 0.1205357 0.8732407
+	#1    0.1038    0.9379
 
 
 # With baron (or GSE81547, E-MTAB-5061, PBMCs) + no cell type removed:
 Rscript Master_deconvolution.R baron none bulk TMM all nnls 100 none 1
 	#Expected output:
 	#       RMSE   Pearson
-	#1 0.0431469 0.9730492
+	#1    0.0724    0.8961
 
 
 # With baron + delta cells removed:
 Rscript Master_deconvolution.R baron none bulk TMM all nnls 100 delta 1
 	#Expected output:
 	#        RMSE   Pearson
-	#1 0.08203786 0.9022057
+	#1     0.0887    0.8197
 ```
 
 
@@ -201,30 +195,29 @@ For single-cell:
 Rscript Master_deconvolution.R example none sc TMM TMM MuSiC 100 none 1
 	#Expected output:
 	#        RMSE   Pearson
-	#1 0.0821538 0.934689
+	#1     0.0351    0.9866
 
 
 # With the example we provided with this repository + "cell_type_1" removed:
 Rscript Master_deconvolution.R example none sc TMM TMM MuSiC 100 cell_type_1 1
 	#Expected output:
 	#       RMSE   Pearson
-	#1 0.1173975 0.8831119
+	#1    0.1044    0.9376
 
 
 # With baron (or GSE81547, E-MTAB-5061, PBMCs) + no cell type removed:
 Rscript Master_deconvolution.R baron none sc TMM TMM MuSiC 100 none 1
 	#Expected output:
 	#        RMSE   Pearson
-	#1 0.03079825 0.9863786
+	#1     0.0488     0.953
 
 
 # With baron + delta cells removed:
 Rscript Master_deconvolution.R baron none sc TMM TMM MuSiC 100 delta 1
 	#Expected output:
 	#        RMSE   Pearson
-	#1 0.07518313 0.9274771
+	#1      0.073    0.8799
 ```
-
 
 sessionInfo() files Linux & macOS
 ----------------------------------

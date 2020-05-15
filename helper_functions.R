@@ -1,4 +1,5 @@
 #source('./CIBERSORT.R')
+options(stringsAsFactors = FALSE)
 
 Normalization <- function(data){
 
@@ -23,73 +24,124 @@ Normalization <- function(data){
 
 
 
-Generator <- function(test, full_phenoData, ncells, dataset){
+Generator <- function(sce, phenoData, Num.mixtures = 1000, pool.size = 100, min.percentage = 1, max.percentage = 99, seed = 24){ 
 
-    require(plyr); require(data.table); require(Matrix); require(matrixStats); require(dplyr); require(gtools)
-
-    for(i1 in ncells){
-        
-        print(i1)
-        random_string = as.character(i1) 
-
-        ################################################################################################################
-        #INPUT generator
-        cellType <- colnames(test)
-        cellTypes <- unique(cellType)
-        group = sapply(cellTypes, function(x) which(cellType %in% x))
-        cell_numbers <- table(cellType)
-
-        CT_composition = list()
-
-        count = 1
-        while(count <= 1000){ #this one ensures proportions and number of cells are feasible with the dataset
-
-            p_num_CTs <- sample(2:min(length(cellTypes),5),1)
-            candidate_comp <- cbind.data.frame(sample(cellTypes,p_num_CTs),get(paste("p",p_num_CTs,sep=""))[sample(1:nrow(get(paste("p",p_num_CTs,sep=""))),1,replace = FALSE),])
-            colnames(candidate_comp) <- c("cell_type","proportion")
-
-            if(sum(!sapply(1:nrow(candidate_comp), function(x) cell_numbers[as.character(candidate_comp$cell_type[x])] >= candidate_comp$proportion[x] * i1))==0){
-            CT_composition[[paste("tissue",count,sep="_")]] <- candidate_comp
-            count = count + 1
-            }
-
-        }
-        
-        #composition in matrix form:
-        COMP = suppressMessages(as.data.frame(data.table::dcast(data.table::melt(CT_composition),cell_type ~ L1, fill = 0)))
-        rownames(COMP) <- COMP$cell_type
-        COMP$cell_type <- NULL
-        P <- COMP
-        #P: add "0" for those present in C but not randomly assigned a proportion
-        not_present <- cellTypes[!cellTypes %in% rownames(COMP)]
-        not_present <- matrix(0,nrow=length(not_present), ncol = ncol(P),dimnames = list(not_present,colnames(P)))
-        
-        if(nrow(not_present) > 0){P <- rbind.data.frame(P, not_present)}
-
-        P = P[,gtools::mixedsort(colnames(P))]
-        P = P[gtools::mixedsort(rownames(P)),]
-        #write.table(P, paste("P",random_string,sep="_"), quote=FALSE,row.names=TRUE,col.names=TRUE,sep="\t")
-
-        cell_composition <- P * i1
-        cell_composition$CT <- rownames(cell_composition)
-        cell_composition <- data.table::melt(cell_composition)
-        cell_composition <- cell_composition[cell_composition$value != 0,]
-
-        chosen_cells <- sapply(names(CT_composition), function(x){
-            temp = cell_composition[cell_composition$variable == x,]
-            unlist(apply(temp,1, function(y){sample(which(cellType==y[1]),size=y[3])}))
-        })
-
-        colnames(chosen_cells) <- colnames(P)
-
-        T <- as.data.frame(apply(chosen_cells,2, function(x){
-            Matrix::rowSums(test[,x])
-        }))
-        
-       return(list(T=T,P=P))
-
+  CT = unique(phenoData$cellType)
+  ?stopifnot(length(CT) >= 2)
+  
+  set.seed(seed)
+  require(dplyr)
+  require(gtools)
+  
+  cell.distribution = data.frame(table(phenoData$cellType),stringsAsFactors = FALSE) 
+  colnames(cell.distribution) = c("CT","max.n")
+  
+  Tissues = list()
+  Proportions = list()
+  
+  for(y in 1:Num.mixtures){
+    
+    #Only allow feasible mixtures based on cell distribution
+    while(!exists("P")){
+      
+      num.CT.mixture = sample(x = 2:length(CT),1)
+      selected.CT = sample(CT, num.CT.mixture, replace = FALSE)
+      
+      P = runif(num.CT.mixture, min.percentage, max.percentage) 
+      P = round(P/sum(P), digits = log10(pool.size))  #sum to 1
+      P = data.frame(CT = selected.CT, expected = P, stringsAsFactors = FALSE)
+      
+      missing.CT = CT[!CT %in% selected.CT]
+      missing.CT = data.frame(CT = missing.CT, expected = rep(0, length(missing.CT)), stringsAsFactors = FALSE)
+      
+      P = rbind.data.frame(P, missing.CT)
+      potential.mix = merge(P, cell.distribution)
+      potential.mix$size = potential.mix$expected * pool.size
+      
+      if( !all(potential.mix$max.n >= potential.mix$size) | sum(P$expected) != 1){
+        rm(list="P") 
+      }
+      
     }
+    
+    # Using info in P to build T simultaneously
+    chosen_cells <- sapply(which(P$expected != 0), function(x){
 
+      n.cells = P$expected[x] * pool.size
+      chosen = sample(phenoData$cellID[phenoData$cellType == P$CT[x]],
+                      n.cells)
+      
+      chosen
+    }) %>% unlist()
+    
+    
+    T <- Matrix::rowSums(sce[,colnames(sce) %in% chosen_cells]) %>% as.data.frame()
+    colnames(T) = paste("mix",y,sep="")
+
+    P = P[,c("CT","expected")]
+    P$mix = paste("mix",y,sep="")
+    
+    Tissues[[y]] <- T
+    Proportions[[y]] <- P
+    
+    rm(list=c("T","P","chosen_cells","missing.CT"))
+    
+  }
+  
+  P = do.call(rbind.data.frame, Proportions)
+  T = do.call(cbind.data.frame, Tissues)
+
+  P = data.table::dcast(P, CT ~ mix, 
+                        value.var = "expected",
+                        fun.aggregate = sum) %>% data.frame(.,row.names = 1) 
+  
+  P = P[,gtools::mixedsort(colnames(P))]
+
+  return(list(T = T, P = P))
+  
+} 
+
+
+
+marker.fc <- function(fit2, log2.threshold = 1, output_name = "markers"){
+  
+	topTable_RESULTS = limma::topTable(fit2, coef = 1:ncol(cont.matrix), number = Inf, adjust.method = "BH", p.value = 0.05, lfc = log2.threshold)
+	AveExpr_pval <- topTable_RESULTS[,(ncol(topTable_RESULTS)-3):ncol(topTable_RESULTS)]
+	topTable_RESULTS <- topTable_RESULTS[,1:(ncol(topTable_RESULTS)-4)]
+
+	if(length(grep("ERCC-",topTable_RESULTS$gene)) > 0){ topTable_RESULTS <- topTable_RESULTS[-grep("ERCC-",topTable_RESULTS$gene),] }
+
+	markers <- apply(topTable_RESULTS,1,function(x){
+	temp = sort(x)
+	((temp[ncol(topTable_RESULTS)] - temp[ncol(topTable_RESULTS)-1]) >= log2.threshold) | (abs(temp[1] - temp[2]) >= log2.threshold)
+
+	})
+
+	topTable_RESULTS = topTable_RESULTS[markers,]
+
+	markers <- cbind.data.frame(rownames(topTable_RESULTS),
+	                                   t(apply(topTable_RESULTS, 1, function(x){
+	                                     temp = max(x)
+	                                     if(temp < log2.threshold){
+	                                       temp = c(min(x),colnames(topTable_RESULTS)[which.min(x)])
+	                                     } else {
+	                                       temp = c(max(x),colnames(topTable_RESULTS)[which.max(x)])
+	                                     } 
+	                                     temp
+	                                   })))
+
+	colnames(markers) <- c("gene","log2FC","CT")
+	markers$log2FC = as.numeric(as.character(markers$log2FC))
+	markers <- markers %>% dplyr::arrange(CT,desc(log2FC)) 
+
+	markers$AveExpr <- AveExpr_pval$AveExpr[match(markers$gene,rownames(AveExpr_pval))]
+	markers$gene <- as.character(markers$gene)
+	markers$CT <- as.character(markers$CT)
+
+	#write.table(markers, file = output_name, row.names = FALSE, col.names = TRUE, sep = "\t", quote = FALSE)
+
+	return(markers)
+  
 }
 
 
@@ -222,7 +274,8 @@ Scaling <- function(matrix, option, phenoDataC=NULL){
 
     } else if (option=="LogNormalize"){
         
-        matrix = as.matrix(expm1(Seurat::LogNormalize(matrix, display.progress = FALSE)))
+        #matrix = as.matrix(expm1(Seurat::LogNormalize(matrix, display.progress = FALSE))) #for v2.1
+        matrix = as.matrix(expm1(Seurat::LogNormalize(matrix, verbose = FALSE))) #for v3
 
     } else if (option=="QN"){
 
@@ -306,7 +359,7 @@ Scaling <- function(matrix, option, phenoDataC=NULL){
         CtrlGenes <- grep("ERCC-",rownames(matrix))
         matrix = DESeq2::DESeqDataSetFromMatrix(matrix, colData = metadata, design = ~ Celltype)
 
-        if(length(CtrlGenes)>1){
+        if(length(CtrlGenes)>1 & sum(rowSums(DESeq2::counts(matrix[CtrlGenes,]) != 0) >= 0.5*(ncol(matrix))) >= 2){
 
             dds <- DESeq2::estimateSizeFactors(matrix, type = "ratio", controlGenes = CtrlGenes)
 
@@ -322,6 +375,17 @@ Scaling <- function(matrix, option, phenoDataC=NULL){
 
         require(SingleR)
         data(human_lengths)
+
+        # Doesn't work with Ensembl IDs:
+        if(length(grep("ENSG000",rownames(matrix))) > 100){
+            
+            suppressMessages(library("AnnotationDbi"))
+            suppressMessages(library("org.Hs.eg.db"))
+            temp = mapIds(org.Hs.eg.db,keys=names(human_lengths),column="ENSEMBL",keytype="SYMBOL",multiVals="first")
+            names(human_lengths) = as.character(temp)
+
+        }
+        
         matrix = SingleR::TPM(counts = matrix, lengths = human_lengths)
         rownames(matrix) = toupper(rownames(matrix))
         detach(package:SingleR, unload=TRUE)
@@ -329,7 +393,7 @@ Scaling <- function(matrix, option, phenoDataC=NULL){
     ####################################################################################
     ## scRNA-seq specific  
 
-    } else if (option=="RNBR"){
+    } else if (option=="SCTransform"){# SCTransform = RNBR
 
         #Model formula is y ~ log_umi
         
@@ -368,7 +432,7 @@ Scaling <- function(matrix, option, phenoDataC=NULL){
 
 #################################################
 ##########    DECONVOLUTION METHODS    ##########
-Deconvolution <- function(T, C, method, phenoDataC, P=NULL, elem = NULL, STRING = NULL, marker_distrib, refProfiles.var){ #marker subsetting performed right before for bulk methods!
+Deconvolution <- function(T, C, method, phenoDataC, P = NULL, elem = NULL, STRING = NULL, marker_distrib, refProfiles.var){ 
 
     bulk_methods = c("CIBERSORT","DeconRNASeq","OLS","nnls","FARDEEP","RLR","DCQ","elastic_net","lasso","ridge","EPIC","DSA","ssKL","ssFrobenius","dtangle")
     sc_methods = c("MuSiC","BisqueRNA","DWLS","deconvSeq","SCDC")
@@ -383,7 +447,12 @@ Deconvolution <- function(T, C, method, phenoDataC, P=NULL, elem = NULL, STRING 
     } else { ### For scRNA-seq methods 
 
         #BisqueRNA requires "SubjectName" in phenoDataC
-        sample_column = grep("[S-s]ample|[S-s]ubject",colnames(phenoDataC))
+        if(length(grep("[N-n]ame",colnames(phenoDataC))) > 0){
+        	sample_column = grep("[N-n]ame",colnames(phenoDataC))
+        } else {
+        	sample_column = grep("[S-s]ample|[S-s]ubject",colnames(phenoDataC))
+        }
+
         colnames(phenoDataC)[sample_column] = "SubjectName"
         rownames(phenoDataC) = phenoDataC$cellID
 
@@ -448,7 +517,7 @@ Deconvolution <- function(T, C, method, phenoDataC, P=NULL, elem = NULL, STRING 
         RESULTS = apply(RESULTS,2,function(x) ifelse(x < 0, 0, x)) #explicit non-negativity constraint
         RESULTS = apply(RESULTS,2,function(x) x/sum(x)) #explicit STO constraint
 
-    } else if (method=="elastic_net"){#standardize = TRUE by default. Me: alpha = 0.2 (pg73, ESL book); lambda=NULL by default 
+    } else if (method=="elastic_net"){#standardize = TRUE by default. lambda=NULL by default 
 
         require(glmnet)# gaussian is the default family option in the function glmnet. https://web.stanford.edu/~hastie/glmnet/glmnet_alpha.html
         RESULTS = apply(T, 2, function(z) coef(glmnet::glmnet(x = as.matrix(C), y = z, alpha = 0.2, standardize = TRUE, lambda = glmnet::cv.glmnet(as.matrix(C), z)$lambda.1se))[1:ncol(C)+1,])
@@ -462,7 +531,7 @@ Deconvolution <- function(T, C, method, phenoDataC, P=NULL, elem = NULL, STRING 
         RESULTS = apply(RESULTS,2,function(x) ifelse(x < 0, 0, x)) #explicit non-negativity constraint
         RESULTS = apply(RESULTS,2,function(x) x/sum(x)) #explicit STO constraint
 
-    } else if (method=="lasso"){ #alpha=1; shrinking some coefficients to 0. Deal with correlation/collinearity
+    } else if (method=="lasso"){ #alpha=1; shrinking some coefficients to 0. 
 
         require(glmnet)
         RESULTS = apply(T, 2, function(z) coef(glmnet::glmnet(x = as.matrix(C), y = z, alpha = 1, standardize = TRUE, lambda = glmnet::cv.glmnet(as.matrix(C), z)$lambda.1se))[1:ncol(C)+1,])
@@ -530,6 +599,7 @@ Deconvolution <- function(T, C, method, phenoDataC, P=NULL, elem = NULL, STRING 
 
     ###################################
     ###################################
+    
     } else if (method == "MuSiC"){
 
         require(MuSiC)
@@ -574,7 +644,7 @@ Deconvolution <- function(T, C, method, phenoDataC, P=NULL, elem = NULL, STRING 
         RESULTS = apply(RESULTS,2,function(x) ifelse(x < 0, 0, x)) #explicit non-negativity constraint
         RESULTS = apply(RESULTS,2,function(x) x/sum(x)) #explicit STO constraint
 
-    } else if (method == "BisqueRNA"){#By default, Bisque uses all genes for decomposition. However, you may supply a list of genes (such as marker genes) to be used with the markers parameter
+    } else if (method == "BisqueRNA"){#By default, BisqueRNA uses all genes for decomposition. However, you may supply a list of genes (such as marker genes) to be used with the markers parameter
 
         require(BisqueRNA)
         RESULTS <- BisqueRNA::ReferenceBasedDecomposition(T.eset, C.eset, markers=NULL, use.overlap=FALSE)$bulk.props #use.overlap is when there's both bulk and scRNA-seq for the same set of samples
@@ -604,18 +674,20 @@ Deconvolution <- function(T, C, method, phenoDataC, P=NULL, elem = NULL, STRING 
 
     RESULTS = RESULTS[gtools::mixedsort(rownames(RESULTS)),]
     RESULTS = data.table::melt(RESULTS)
+	colnames(RESULTS) <-c("CT","tissue","observed_values")
 
-    if(!is.null(P)){
+	if(!is.null(P)){
 
-        P = P[gtools::mixedsort(rownames(P)),]
-        P$ID = rownames(P)
-        P = data.table::melt(P, id.vars="ID")
+		P = P[gtools::mixedsort(rownames(P)),]
+		P$CT = rownames(P)
+		P = data.table::melt(P, id.vars="CT")
+		colnames(P) <-c("CT","tissue","expected_values")
 
-        RESULTS$expected_values <- P$value
-        colnames(RESULTS)[1:3] <- c("CT","tissue","observed_values")
-        RESULTS$observed_values <- round(RESULTS$observed_values,3)
+		RESULTS = merge(RESULTS,P)
+		RESULTS$expected_values <-round(RESULTS$expected_values,3)
+		RESULTS$observed_values <-round(RESULTS$observed_values,3)
 
-    }
+	}
 
     return(RESULTS) 
 

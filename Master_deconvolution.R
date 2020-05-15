@@ -30,14 +30,9 @@ to_remove = args[8]
 num_cores = min(as.numeric(args[9]),parallel::detectCores()-1)
 
 #-------------------------------------------------------
-### Helper functions + CIBERSORT external code + CT proportions
+### Helper functions + CIBERSORT external code
 source('./helper_functions.R')
 # source('CIBERSORT.R')
-
-p2 <- as.matrix(read.table("./p2.txt"))
-p3 <- as.matrix(read.table("./p3.txt"))
-p4 <- as.matrix(read.table("./p4.txt"))
-p5 <- as.matrix(read.table("./p5.txt"))
 
 #-------------------------------------------------------
 ### Read data and metadata
@@ -72,15 +67,9 @@ if(length(cellsToRemove) != 0){
 	full_phenoData <- full_phenoData[-cellsToRemove,]
 }
 
-# Keep only "detectable" genes: at least 30% of cells within a CT have a read/UMI count different from 0
-cellType <- as.character(full_phenoData$cellType[match(colnames(data),full_phenoData$cellID)])
-keep <- sapply(unique(cellType), function(x) {
-        CT_hits = which(cellType %in% x)
-        size = ceiling(0.30*length(CT_hits))
-        Matrix::rowSums(data[,CT_hits,drop=FALSE] != 0) >= size
-    })
-
-data = data[Matrix::rowSums(keep) > 0,]
+# Keep only "detectable" genes: at least 5% of cells (regardless of the group) have a read/UMI count different from 0
+keep <- which(Matrix::rowSums(data > 0) >= round(0.05 * ncol(data)))
+data = data[keep,]
 
 #-------------------------------------------------------
 ### Data split into training/test 
@@ -102,13 +91,13 @@ original_cell_names <- original_cell_names[to_keep]
 # Data split into train & test  
 training <- as.numeric(unlist(sapply(unique(colnames(data)), function(x) {
             sample(which(colnames(data) %in% x), cell_counts[x]/2) })))
-test <- which(!1:ncol(data) %in% training)
+testing <- which(!1:ncol(data) %in% training)
 
 # Generate phenodata for reference matrix C
 pDataC = pData[training,]
 
 train <- data[,training]
-test <- data[,test]
+test <- data[,testing]
 
 # "write.table" & "saveRDS" statements are optional, for users willing to avoid generation of matrix C every time:    
 # write.table(pDataC, file = paste(dataset,"phenoDataC",sep="_"),row.names=FALSE,col.names=TRUE,sep="\t",quote=FALSE)
@@ -124,7 +113,7 @@ group = list()
 for(i in unique(cellType)){ 
 	group[[i]] <- which(cellType %in% i)
 }
-C = lapply(group,function(x) Matrix::rowMeans(train[,x])) #C should be made with MEAN, not sum! (to agree with the way markers were selected)
+C = lapply(group,function(x) Matrix::rowMeans(train[,x])) #C should be made with the mean (not sum) to agree with the way markers were selected
 C = round(do.call(cbind.data.frame, C))
 # write.table(C, file = "C",row.names=TRUE,col.names=TRUE,sep="\t",quote=FALSE,)
 
@@ -136,10 +125,19 @@ rownames(refProfiles.var) <- rownames(train)
 
 #-------------------------------------------------------
 #Normalization of "train" followed by marker selection 
+
+#for marker selection, keep genes where at least 30% of cells within a cell type have a read/UMI count different from 0
+cellType = colnames(train) 
+keep <- sapply(unique(cellType), function(x) {
+	CT_hits = which(cellType %in% x)
+ 	size = ceiling(0.3*length(CT_hits))
+ 	Matrix::rowSums(train[,CT_hits,drop=FALSE] != 0) >= size
+})
+train = train[Matrix::rowSums(keep) > 0,]
 train2 = Normalization(train)
 
 # INITIAL CONTRASTS for marker selection WITHOUT taking correlated CT into account 
-#[compare 1 grp with avg expression of all other groups (COLUMN-WISE)]
+#[compare one group with average expression of all other groups]
 annotation = factor(colnames(train2))
 design <- model.matrix(~0+annotation)
 colnames(design) <- unlist(lapply(strsplit(colnames(design),"annotation"), function(x) x[2]))
@@ -152,46 +150,19 @@ fit <- limma::lmFit(v, design)
 fit2 <- limma::contrasts.fit(fit, cont.matrix)
 fit2 <- limma::eBayes(fit2, trend=TRUE)
 
-topTable_RESULTS = limma::topTable(fit2,coef=1:ncol(cont.matrix),number=Inf, adjust.method="BH", p.value=0.05, lfc=round(log2(1.5),2))
-AveExpr_pval <- topTable_RESULTS[,(ncol(topTable_RESULTS)-3):ncol(topTable_RESULTS)]
-topTable_RESULTS <- topTable_RESULTS[,1:(ncol(topTable_RESULTS)-4)]
-
-markers <- apply(topTable_RESULTS,1,function(x){
-         temp = sort(x)
-         ((temp[ncol(topTable_RESULTS)] - temp[ncol(topTable_RESULTS)-1]) >= 0.3) | (abs(temp[1] - temp[2]) >= 0.3)
-     })
-
-topTable_RESULTS = topTable_RESULTS[markers,]
-
-topTable_RESULTS <- cbind.data.frame(rownames(topTable_RESULTS),
-                                t(apply(topTable_RESULTS, 1, function(x){
-                                    temp = max(x)
-                                    if(temp < round(log2(1.5),2)){
-                                        temp = c(min(x),colnames(topTable_RESULTS)[which.min(x)])
-                                    } else {
-                                        temp = c(max(x),colnames(topTable_RESULTS)[which.max(x)])
-                                    } 
-                                    temp
-                                })))
-                                    
-colnames(topTable_RESULTS) <- c("gene","log2FC","CT")
-topTable_RESULTS$log2FC = as.numeric(as.character(topTable_RESULTS$log2FC))
-topTable_RESULTS <- topTable_RESULTS %>% dplyr::arrange(CT,desc(log2FC))
-
-if(length(grep("ERCC-",topTable_RESULTS$gene)) > 0){ topTable_RESULTS <- topTable_RESULTS[-grep("ERCC-",topTable_RESULTS$gene),] }
-topTable_RESULTS$AveExpr <- AveExpr_pval$AveExpr[match(topTable_RESULTS$gene,rownames(AveExpr_pval))]
-#write.table(topTable_RESULTS, file = "markers",row.names=FALSE,col.names=TRUE,sep="\t",quote=FALSE,)
+markers = marker.fc(fit2, log2.threshold = log2(2))
 
 #-------------------------------------------------------
 ### Generation of 1000 pseudo-bulk mixtures (T) (on test data)
 cellType <- colnames(test)
-generator <- Generator(test,full_phenoData,number_cells,dataset)
+colnames(test) <- original_cell_names[testing]
+
+generator <- Generator(sce = test, phenoData = full_phenoData, Num.mixtures = 1000, pool.size = number_cells)
 T <- generator[["T"]]
 P <- generator[["P"]]
 
 #-------------------------------------------------------
 ### Transformation, scaling/normalization, marker selection for bulk deconvolution methods and deconvolution:
-
 if(deconv_type == "bulk"){
 
 	T = Transformation(T, transformation)
@@ -201,7 +172,7 @@ if(deconv_type == "bulk"){
 	C = Scaling(C, normalization)
 
 	# marker selection (on training data) 
-	marker_distrib = marker_strategies(topTable_RESULTS, marker_strategy, C)
+	marker_distrib = marker_strategies(markers, marker_strategy, C)
 
 	#If a cell type is removed, only meaningful mixtures where that CT was present (proportion < 0) are kept:
 	if(to_remove != "none"){
@@ -211,7 +182,7 @@ if(deconv_type == "bulk"){
 		P <- P[!rownames(P) %in% to_remove, colnames(T)]
 		refProfiles.var = refProfiles.var[,colnames(refProfiles.var) %in% rownames(P) & (!colnames(refProfiles.var) %in% to_remove)]
 		marker_distrib <- marker_distrib[marker_distrib$CT %in% rownames(P) & (marker_distrib$CT != to_remove),]
-
+		
 	}
 
 	RESULTS = Deconvolution(T = T, C = C, method = method, P = P, elem = to_remove, marker_distrib = marker_distrib, refProfiles.var = refProfiles.var) 
@@ -235,8 +206,9 @@ if(deconv_type == "bulk"){
 	}
 
 	RESULTS = Deconvolution(T = T, C = C, method = method, phenoDataC = pDataC, P = P, elem = to_remove, refProfiles.var = refProfiles.var) 
-		
+
 }
 
-RESULTS = RESULTS %>% dplyr::summarise(RMSE=sqrt(mean((observed_values-expected_values)^2)), Pearson=cor(observed_values,expected_values))
+RESULTS = RESULTS %>% dplyr::summarise(RMSE = sqrt(mean((observed_values-expected_values)^2)) %>% round(.,4), 
+									   Pearson=cor(observed_values,expected_values) %>% round(.,4))
 print(RESULTS)
