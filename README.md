@@ -42,10 +42,12 @@ for (i in packages3){ BiocManager::install(i, character.only = TRUE)}
 packages2 = c('NMF','csSAM','limSolve','corpcor')
 for (i in packages2){ install.packages(i, character.only = TRUE)}
 
-# Special instructions for CellMix
+# Special instructions for CellMix and DSA
 install.packages("BiocInstaller", repos="http://bioconductor.org/packages/3.7/bioc/")
 system('wget http://web.cbio.uct.ac.za/~renaud/CRAN/src/contrib/CellMix_1.6.2.tar.gz')
 system("R CMD INSTALL CellMix_1.6.2.tar.gz")
+system('wget https://github.com/zhandong/DSA/raw/master/Package/version_1.0/DSA_1.0.tar.gz')
+system("R CMD INSTALL DSA_1.0.tar.gz")
 
 # Following packages come from Github
 devtools::install_github("GfellerLab/EPIC", build_vignettes=TRUE) #requires knitr
@@ -162,7 +164,7 @@ For bulk:
 Rscript Master_deconvolution.R example none bulk TMM all nnls 100 none 1
 	#Expected output:
 	#        RMSE   Pearson
-	#1 	   0.0351    0.9866
+	#1     0.0351    0.9866
 
 
 # With the example we provided with this repository + "cell_type_1" removed:
