@@ -11,7 +11,7 @@ The **other five external datasets** (together with the necessary metadata) can 
 * Baron: https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE84133 (Specifically, GSM2230757 to GSM2230760 for human pancreatic islands)
 * GSE81547: https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE81547
 * E-MTAB-5061: https://www.ebi.ac.uk/arrayexpress/experiments/E-MTAB-5061/
-* PBMCs: https://support.10xgenomics.com/single-cell-geneexpression/datasets/1.1.0/fresh_68k_pbmc_donor_a 
+* PBMCs: https://support.10xgenomics.com/single-cell-gene-expression/datasets/1.1.0/fresh_68k_pbmc_donor_a 
 * kidney.HCL: https://figshare.com/articles/HCL_DGE_Data/7235471
 
 Regarding E-MTAB-5061: cells with "not_applicable", "unclassified” and “co-expression_cell" labels were excluded and only cells coming from six healthy patients (non-diabetic) were kept.
