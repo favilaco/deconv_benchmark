@@ -35,7 +35,7 @@ for (i in packages){ install.packages(i, character.only = TRUE)}
 
 # Installation using BiocManager:
 # Some packages that didn't work with install.packages (e.g. may not be present in a CRAN repository chosen by the user)
-packages3 = c('limma','edgeR','DESeq2','pcaMethods','BiocParallel','preprocessCore','SingleR','scater','SingleCellExperiment','Linnorm','DeconRNASeq','multtest','GSEABase','annotate','genefilter','preprocessCore','graph','MAST','Biobase') #last two are required by DWLS and MuSiC, respectively.
+packages3 = c('limma','edgeR','DESeq2','pcaMethods','BiocParallel','preprocessCore','scater','SingleCellExperiment','Linnorm','DeconRNASeq','multtest','GSEABase','annotate','genefilter','preprocessCore','graph','MAST','Biobase') #last two are required by DWLS and MuSiC, respectively.
 for (i in packages3){ BiocManager::install(i, character.only = TRUE)}
 
 # Dependencies for CellMix: 'NMF', 'csSAM', 'GSEABase', 'annotate', 'genefilter', 'preprocessCore', 'limSolve', 'corpcor', 'graph', 'BiocInstaller'
@@ -56,7 +56,7 @@ devtools::install_bitbucket("yuanlab/dwls", ref="default")
 devtools::install_github("meichendong/SCDC")
 devtools::install_github("rosedu1/deconvSeq")
 devtools::install_github("cozygene/bisque")
-
+devtools::install_github("dviraran/SingleR@v1.0")
 ```
 
 Users interested in the **generation of pseudo-bulk mixtures from scRNA-seq data** can use the *"Generator"* function that is located inside **helper_functions.R**
