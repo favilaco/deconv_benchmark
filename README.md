@@ -1,6 +1,6 @@
 Source code (R statistical programming language, v3.6) to reproduce the results described in the article:
 
-> *Avila Cobos F, Alquicira-Hernandez J, Powell J, Mestdagh P and De Preter K.* **Comprehensive benchmarking of computational deconvolution of transcriptomics data.** *(bioRxiv; https://doi.org/10.1101/2020.01.10.897116)*
+> *Avila Cobos F, Alquicira-Hernandez J, Powell JE, Mestdagh P and De Preter K.* **Benchmarking of cell type deconvolution pipelines for transcriptomics data.** *(Nature Communications; https://doi.org/10.1038/s41467-020-19015-1)*
 
 DATASETS
 ========
